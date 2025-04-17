@@ -1,5 +1,6 @@
 package com.example.notetakingapp
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,28 +34,59 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 
-
+// Data class for notes
+@Serializable
 data class Note(
     val id: Long = System.currentTimeMillis(),
     var title: String = "",
     var content: String = ""
 )
 
-class NotesViewModel : ViewModel() {
+
+class NotesViewModel(private val context: Context) : ViewModel() {
     private val _notes = MutableStateFlow<List<Note>>(emptyList())
     val notes: StateFlow<List<Note>> = _notes
 
+    init {
+        viewModelScope.launch {
+            context.notesDataStore.data.collect {
+                _notes.value = it
+            }
+        }
+    }
+
+    // Function to add a new note to the list
     fun addNote(note: Note) {
-        _notes.value = _notes.value + note
+        val updated = _notes.value + note
+        saveNotes(updated)
     }
 
+    // Function to update existing note
     fun updateNote(updatedNote: Note) {
-        _notes.value = _notes.value.map { if (it.id == updatedNote.id) updatedNote else it }
+        val updated = _notes.value.map { if (it.id == updatedNote.id) updatedNote else it }
+        saveNotes(updated)
     }
 
-    fun getNoteById(id: Long): Note? {
-        return _notes.value.find { it.id == id }
+    // Function to erase note
+    fun deleteNote(id: Long) {
+        val updated = _notes.value.filter { it.id != id }
+        saveNotes(updated)
+    }
+
+    // Function to find a note by it's unique id
+    fun getNoteById(id: Long): Note? = _notes.value.find { it.id == id }
+
+    // Function to save notes to data store
+    private fun saveNotes(notes: List<Note>) {
+        viewModelScope.launch {
+            context.notesDataStore.updateData { notes }
+        }
     }
 }
 
@@ -68,74 +101,36 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Function used to manage navigation between pages
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val context = LocalContext.current
+
+    val notesViewModel: NotesViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return NotesViewModel(context.applicationContext) as T
+        }
+    })
 
     NavHost(navController = navController, startDestination = "home_screen") {
-        // Home screen route
         composable("home_screen") {
-            HomePage(navController)
+            HomePage(navController, notesViewModel)
         }
-
-        // Settings screen route
         composable("settings_screen") {
             SettingsPage(navController)
         }
-
-        // Note edit screen route
         composable("create_note_screen") {
-            EditNotePage(navController, null)
+            EditNotePage(navController, null, notesViewModel)
         }
-
-        // Specific note route
         composable("edit_note_screen/{noteId}") { backStackEntry ->
             val noteId = backStackEntry.arguments?.getString("noteId")?.toLongOrNull()
-            EditNotePage(navController, noteId)
-        }
-    }
-
-}
-
-@Composable
-fun HomePage(navController: NavController, viewModel: NotesViewModel = viewModel()) {
-    val notes by viewModel.notes.collectAsState()
-    Column(modifier = Modifier.fillMaxSize()) {
-        //Header
-        Header(navController)
-
-        //Sub-header
-        SubHeader()
-
-        //Create new note
-        Button(
-            onClick = { navController.navigate("create_note_screen") },
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text("New Note")
-        }
-
-        //Main content
-        LazyColumn(modifier = Modifier.padding(16.dp)) {
-            items(notes, key = { it.id }) { note ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                        .clickable {
-                            navController.navigate("edit_note_screen/${note.id}")
-                        }
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = note.title, style = MaterialTheme.typography.titleMedium)
-                        Text(text = note.content.take(50) + "...", maxLines = 1)
-                    }
-                }
-            }
+            EditNotePage(navController, noteId, notesViewModel)
         }
     }
 }
 
+// Header for all pages
 @Composable
 fun Header(navController: NavController) {
     Row(
@@ -171,8 +166,9 @@ fun Header(navController: NavController) {
     }
 }
 
+// Home page specific sub header
 @Composable
-fun SubHeader() {
+fun HomeSubHeader() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -180,6 +176,7 @@ fun SubHeader() {
             .background(Color(0xFF435f8c)),
         contentAlignment = Alignment.CenterStart
     ) {
+        //Temporary content
         Text(
             text = "Sub-header for optional features",
             modifier = Modifier.padding(start = 16.dp),
@@ -189,6 +186,79 @@ fun SubHeader() {
     }
 }
 
+// Note page specific sub header
+@Composable
+fun NoteSubHeader(onDeleteClick: (() -> Unit)? = null) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(Color(0xFF435f8c)),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+
+            // Delete note button
+            if (onDeleteClick != null) {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Note",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Home Page
+@Composable
+fun HomePage(navController: NavController, viewModel: NotesViewModel) {
+    val notes by viewModel.notes.collectAsState()
+    Column(modifier = Modifier.fillMaxSize()) {
+        //Header
+        Header(navController)
+
+        //Home Page Sub-header
+        HomeSubHeader()
+
+        //Create new note
+        Button(
+            onClick = { navController.navigate("create_note_screen") },
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text("New Note")
+        }
+
+        //Main content
+        LazyColumn(modifier = Modifier.padding(16.dp)) {
+            items(notes, key = { it.id }) { note ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .clickable {
+                            navController.navigate("edit_note_screen/${note.id}")
+                        }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(text = note.title, style = MaterialTheme.typography.titleMedium)
+                        Text(text = note.content.take(50) + "...", maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Settings Page
 @Composable
 fun SettingsPage(navController: NavController) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -207,8 +277,9 @@ fun SettingsPage(navController: NavController) {
     }
 }
 
+// Note taking page
 @Composable
-fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesViewModel = viewModel()) {
+fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesViewModel) {
     val note = if (noteId != null) viewModel.getNoteById(noteId) else null
     var title by remember { mutableStateOf(note?.title ?: "") }
     var content by remember { mutableStateOf(note?.content ?: "") }
@@ -217,8 +288,13 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
         //Header
         Header(navController)
 
-        //Sub-header
-        SubHeader()
+        //Note Specific Sub-header
+        NoteSubHeader(onDeleteClick = {
+            if (note != null) {
+                viewModel.deleteNote(note.id)
+                navController.popBackStack()
+            }
+        })
 
 
         Column(
