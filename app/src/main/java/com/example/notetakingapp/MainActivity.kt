@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.FocusInteraction
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -32,13 +34,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.Placeholder
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+
 
 // Data class for notes
 @Serializable
@@ -201,7 +210,7 @@ fun NoteSubHeader(onDeleteClick: (() -> Unit)? = null) {
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.End
         ) {
 
             // Delete note button
@@ -280,59 +289,84 @@ fun SettingsPage(navController: NavController) {
 // Note taking page
 @Composable
 fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesViewModel) {
-    val note = if (noteId != null) viewModel.getNoteById(noteId) else null
-    var title by remember { mutableStateOf(note?.title ?: "") }
-    var content by remember { mutableStateOf(note?.content ?: "") }
+    val existingNote = noteId?.let { viewModel.getNoteById(it) }
+    val isNewNote = existingNote == null
+    var note by remember { mutableStateOf(existingNote ?: Note()) }
+    var hasBeenAdded by remember { mutableStateOf(!isNewNote) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    val focusRequester = remember { FocusRequester() }
+
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
+            .verticalScroll(scrollState)
+    ) {
+
         //Header
         Header(navController)
 
-        //Note Specific Sub-header
+        //Note taking sub header
         NoteSubHeader(onDeleteClick = {
-            if (note != null) {
-                viewModel.deleteNote(note.id)
-                navController.popBackStack()
-            }
+            viewModel.deleteNote(note.id)
+            navController.popBackStack()
         })
 
+        Spacer(modifier = Modifier.height(16.dp))
 
+        //Main content
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .padding(16.dp)
         ) {
 
+            // Title field
             OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Title") },
+                value = note.title,
+                onValueChange = {
+                    note = note.copy(title = it)
+                    if (!hasBeenAdded) {
+                        viewModel.addNote(note)
+                        hasBeenAdded = true
+                    } else {
+                        viewModel.updateNote(note)
+                    }
+                },
+                placeholder = { Text("Title") },
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Note taking field
             OutlinedTextField(
-                value = content,
-                onValueChange = { content = it },
-                label = { Text("Content") },
+                value = note.content,
+                onValueChange = {
+                    note = note.copy(content = it)
+                    if (!hasBeenAdded) {
+                        viewModel.addNote(note)
+                        hasBeenAdded = true
+                    } else {
+                        viewModel.updateNote(note)
+                    }
+                },
+                placeholder = { Text("Write your note here") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp),
-                maxLines = 10
+                    .height(IntrinsicSize.Min)
+                    .focusRequester(focusRequester),
+                maxLines = Int.MAX_VALUE
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(400.dp))
 
-            Button(onClick = {
-                if (note != null) {
-                    viewModel.updateNote(note.copy(title = title, content = content))
-                } else {
-                    viewModel.addNote(Note(title = title, content = content))
-                }
-                navController.popBackStack()
-            }) {
-                Text("Save Note")
+            // Request focus on launch
+            LaunchedEffect(Unit) {
+                focusRequester.requestFocus()
             }
         }
     }
