@@ -11,6 +11,7 @@ composeBom = "2025.04.00"
 navigationCompose = "2.8.9"
 kotlinx-serialization = "1.6.3"
 datastore = "1.1.4"
+markwon = "4.6.2"
 
 
 
@@ -33,6 +34,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 androidx-datastore-core = { group = "androidx.datastore", name = "datastore-core", version.ref = "datastore" }
 androidx-datastore = { group = "androidx.datastore", name = "datastore", version.ref = "datastore" }
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
 
 
 [plugins]

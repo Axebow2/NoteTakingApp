@@ -2,12 +2,12 @@ package com.example.notetakingapp
 
 import android.content.Context
 import android.os.Bundle
+import android.widget.TextView
+import android.widget.ToggleButton
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.FocusInteraction
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -43,8 +43,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.noties.markwon.Markwon
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
@@ -195,6 +199,38 @@ fun HomeSubHeader() {
     }
 }
 
+// Button to toggle different text types
+@Composable
+fun ToggleButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (enabled) Color(0xFF90CAF9) else MaterialTheme.colorScheme.primary
+        )
+    ) {
+        Text(label)
+    }
+}
+
+// Function to accurately display markdown text (TEMPORARY)
+@Composable
+fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            TextView(ctx).apply {
+                setPadding(0, 8, 0, 0)
+                textSize = 16f
+            }
+        },
+        update = { textView ->
+            val markwon = Markwon.create(context)
+            markwon.setMarkdown(textView, markdown)
+        }
+    )
+}
+
 // Note page specific sub header
 @Composable
 fun NoteSubHeader(onDeleteClick: (() -> Unit)? = null) {
@@ -292,11 +328,15 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
     val existingNote = noteId?.let { viewModel.getNoteById(it) }
     val isNewNote = existingNote == null
     var note by remember { mutableStateOf(existingNote ?: Note()) }
+    var contentState by remember { mutableStateOf(TextFieldValue(text = note.content)) }
     var hasBeenAdded by remember { mutableStateOf(!isNewNote) }
 
     val focusRequester = remember { FocusRequester() }
 
     val scrollState = rememberScrollState()
+
+    var boldEnabled by remember { mutableStateOf(false) }
+    var italicEnabled by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -323,6 +363,48 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                 .imePadding()
                 .padding(16.dp)
         ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Toggle BOLD typing
+                ToggleButton("B", boldEnabled) {
+                        val tag = "**"
+                        val cursorPos = contentState.selection.start
+
+                        // Insert tag at cursor
+                        val updatedText = buildString {
+                            append(contentState.text.substring(0, cursorPos))
+                            append(tag)
+                            append(contentState.text.substring(cursorPos))
+                        }
+
+                        // Move cursor past inserted tag
+                        contentState = TextFieldValue(
+                            text = updatedText,
+                            selection = TextRange(cursorPos + tag.length)
+                        )
+
+                        boldEnabled = !boldEnabled
+                    }
+                // Toggle ITALIC typing
+                ToggleButton("I", italicEnabled) {
+                    val tag = "*"
+                    val cursorPos = contentState.selection.start
+
+                    // Insert tag at cursor
+                    val updatedText = buildString {
+                        append(contentState.text.substring(0, cursorPos))
+                        append(tag)
+                        append(contentState.text.substring(cursorPos))
+                    }
+
+                    // Move cursor past inserted tag
+                    contentState = TextFieldValue(
+                        text = updatedText,
+                        selection = TextRange(cursorPos + tag.length)
+                    )
+
+                    italicEnabled = !italicEnabled
+                }
+            }
 
             // Title field
             OutlinedTextField(
@@ -344,9 +426,46 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
 
             // Note taking field
             OutlinedTextField(
-                value = note.content,
-                onValueChange = {
-                    note = note.copy(content = it)
+                value = contentState,
+                onValueChange = { newValue ->
+                    var updatedText = newValue.text
+                    var cursorPos = newValue.selection.start
+
+                    // Check if user just typed a space
+                    if (newValue.text.length > contentState.text.length &&
+                        newValue.text.getOrNull(cursorPos - 1) == ' ') {
+
+                        val closingTags = StringBuilder()
+
+                        if (boldEnabled) {
+                            closingTags.append("**")
+                            boldEnabled = false
+                        }
+                        if (italicEnabled) {
+                            closingTags.append("*")
+                            italicEnabled = false
+                        }
+
+                        if (closingTags.isNotEmpty()) {
+                            // Insert tags before the space
+                            updatedText = buildString {
+                                append(newValue.text.substring(0, cursorPos - 1))
+                                append(closingTags.toString())
+                                append(" ")
+                                append(newValue.text.substring(cursorPos))
+                            }
+
+                            cursorPos += closingTags.length // move cursor after inserted tags
+                        }
+                    }
+
+                    contentState = TextFieldValue(
+                        text = updatedText,
+                        selection = TextRange(cursorPos)
+                    )
+
+                    note = note.copy(content = updatedText)
+
                     if (!hasBeenAdded) {
                         viewModel.addNote(note)
                         hasBeenAdded = true
@@ -362,12 +481,8 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                 maxLines = Int.MAX_VALUE
             )
 
-            Spacer(modifier = Modifier.height(400.dp))
-
-            // Request focus on launch
-            LaunchedEffect(Unit) {
-                focusRequester.requestFocus()
-            }
+            // Markdown previewer (TEMPORARY)
+            MarkdownText(note.content, modifier = Modifier.fillMaxWidth())
         }
     }
 }

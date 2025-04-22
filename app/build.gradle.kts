@@ -71,6 +71,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.androidx.datastore.core)
     implementation(libs.androidx.datastore)
+    implementation(libs.markwon.core)
 
 
 }
