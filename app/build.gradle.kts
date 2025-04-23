@@ -72,6 +72,8 @@ dependencies {
     implementation(libs.androidx.datastore.core)
     implementation(libs.androidx.datastore)
     implementation(libs.markwon.core)
+    implementation(libs.richeditor.compose)
+
 
 
 }
