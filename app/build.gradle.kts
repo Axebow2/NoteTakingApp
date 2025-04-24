@@ -73,7 +73,7 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.markwon.core)
     implementation(libs.richeditor.compose)
-
+    implementation(libs.material.icons.extended)
 
 
 }

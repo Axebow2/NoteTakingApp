@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -35,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +53,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.foundation.lazy.grid.items
+
 
 
 // Data class for notes
@@ -60,6 +67,7 @@ data class Note(
     var content: String = ""
 )
 
+enum class ViewMode { LIST, GRID }
 
 class NotesViewModel(private val context: Context) : ViewModel() {
     private val _notes = MutableStateFlow<List<Note>>(emptyList())
@@ -180,7 +188,7 @@ fun Header(navController: NavController) {
 
 // Home page specific sub header
 @Composable
-fun HomeSubHeader() {
+fun HomeSubHeader(viewMode: ViewMode, onToggleView: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -188,13 +196,23 @@ fun HomeSubHeader() {
             .background(Color(0xFF435f8c)),
         contentAlignment = Alignment.CenterStart
     ) {
-        //Temporary content
-        Text(
-            text = "Sub-header for optional features",
-            modifier = Modifier.padding(start = 16.dp),
-            color = Color.White,
-            fontSize = 14.sp
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+
+            // Button to toggle notes view type
+            IconButton(onClick = onToggleView) {
+                Icon(
+                    imageVector = if (viewMode == ViewMode.LIST) Icons.Filled.Menu else Icons.Filled.GridView,
+                    contentDescription = "Toggle View",
+                    tint = Color.White
+                )
+            }
+        }
     }
 }
 
@@ -211,6 +229,21 @@ fun ToggleButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+// Note card composable
+@Composable
+fun NoteCard(note: Note, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(4.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = note.title, style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
 
 // Note page specific sub header
 @Composable
@@ -244,18 +277,26 @@ fun NoteSubHeader(onDeleteClick: (() -> Unit)? = null) {
     }
 }
 
+
 // Home Page
 @Composable
 fun HomePage(navController: NavController, viewModel: NotesViewModel) {
     val notes by viewModel.notes.collectAsState()
+    var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         //Header
         Header(navController)
 
         //Home Page Sub-header
-        HomeSubHeader()
+        HomeSubHeader(
+            viewMode = viewMode,
+            onToggleView = {
+                viewMode = if (viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
+            }
+        )
 
-        //Create new note
+        // Create new note
         Button(
             onClick = { navController.navigate("create_note_screen") },
             modifier = Modifier.padding(16.dp)
@@ -263,20 +304,28 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
             Text("New Note")
         }
 
-        //Main content
-        LazyColumn(modifier = Modifier.padding(16.dp)) {
-            items(notes, key = { it.id }) { note ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                        .clickable {
-                            navController.navigate("edit_note_screen/${note.id}")
-                        }
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = note.title, style = MaterialTheme.typography.titleMedium)
-                    }
+        // Display notes in a list view
+        if (viewMode == ViewMode.LIST) {
+            LazyColumn(modifier = Modifier.padding(16.dp)) {
+                items(notes, key = { it.id }) { note ->
+                    NoteCard(note, onClick = {
+                        navController.navigate("edit_note_screen/${note.id}")
+                    })
+                }
+            }
+        } else {
+        // Display notes in a grid view
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.padding(16.dp),
+                contentPadding = PaddingValues(4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(notes, key = { it.id }) { note ->
+                    NoteCard(note, onClick = {
+                        navController.navigate("edit_note_screen/${note.id}")
+                    })
                 }
             }
         }

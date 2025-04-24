@@ -38,6 +38,8 @@ androidx-datastore-core = { group = "androidx.datastore", name = "datastore-core
 androidx-datastore = { group = "androidx.datastore", name = "datastore", version.ref = "datastore" }
 markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
 richeditor-compose = { module = "com.mohamedrejeb.richeditor:richeditor-compose", version.ref = "richeditorCompose" }
+material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+
 
 
 
