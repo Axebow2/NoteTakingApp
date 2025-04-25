@@ -56,6 +56,10 @@ import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.text.TextStyle
 
 
 
@@ -188,23 +192,40 @@ fun Header(navController: NavController) {
 
 // Home page specific sub header
 @Composable
-fun HomeSubHeader(viewMode: ViewMode, onToggleView: () -> Unit) {
+fun HomeSubHeader(
+        viewMode: ViewMode,
+        onToggleView: () -> Unit,
+        searchQuery: String,
+        onSearchQueryChange: (String) -> Unit
+    ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
             .background(Color(0xFF435f8c)),
         contentAlignment = Alignment.CenterStart
-    ) {
+    )
+    {
         Row(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFF435f8c))
                 .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Custom search bar
+            CustomSearchBar(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+            )
 
-            // Button to toggle notes view type
+
+            Spacer(Modifier.width(8.dp))
+
+            // Toggle view button
             IconButton(onClick = onToggleView) {
                 Icon(
                     imageVector = if (viewMode == ViewMode.LIST) Icons.Filled.Menu else Icons.Filled.GridView,
@@ -223,9 +244,52 @@ fun ToggleButton(text: String, enabled: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (enabled) Color.Gray else Color.LightGray
-        )
+        ),
+        modifier = Modifier
+            .padding(4.dp)
+            .width(30.dp)
+            .height(30.dp),
+        contentPadding = PaddingValues(0.dp)
     ) {
         Text(text)
+    }
+}
+
+// Custom search bar
+@Composable
+fun CustomSearchBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(Color.White, RoundedCornerShape(4.dp))
+            .height(36.dp)
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (value.isEmpty()) {
+            Text(
+                text = "Search…",
+                color = Color.Gray,
+                fontSize = 14.sp
+            )
+        }
+
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            textStyle = TextStyle(
+                color = Color.Black,
+                fontSize = 14.sp
+            ),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { innerTextField ->
+                innerTextField()
+            }
+        )
     }
 }
 
@@ -247,7 +311,9 @@ fun NoteCard(note: Note, onClick: () -> Unit) {
 
 // Note page specific sub header
 @Composable
-fun NoteSubHeader(onDeleteClick: (() -> Unit)? = null) {
+fun NoteSubHeader(
+    onDeleteClick: (() -> Unit)? = null
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -258,12 +324,13 @@ fun NoteSubHeader(onDeleteClick: (() -> Unit)? = null) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
 
-            // Delete note button
+
+            // Delete button (if available)
             if (onDeleteClick != null) {
                 IconButton(onClick = onDeleteClick) {
                     Icon(
@@ -283,53 +350,65 @@ fun NoteSubHeader(onDeleteClick: (() -> Unit)? = null) {
 fun HomePage(navController: NavController, viewModel: NotesViewModel) {
     val notes by viewModel.notes.collectAsState()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+    var searchQuery by remember { mutableStateOf("") }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        //Header
-        Header(navController)
-
-        //Home Page Sub-header
-        HomeSubHeader(
-            viewMode = viewMode,
-            onToggleView = {
-                viewMode = if (viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
-            }
-        )
-
-        // Create new note
-        Button(
-            onClick = { navController.navigate("create_note_screen") },
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text("New Note")
-        }
-
-        // Display notes in a list view
-        if (viewMode == ViewMode.LIST) {
-            LazyColumn(modifier = Modifier.padding(16.dp)) {
-                items(notes, key = { it.id }) { note ->
-                    NoteCard(note, onClick = {
-                        navController.navigate("edit_note_screen/${note.id}")
-                    })
-                }
-            }
-        } else {
-        // Display notes in a grid view
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.padding(16.dp),
-                contentPadding = PaddingValues(4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(notes, key = { it.id }) { note ->
-                    NoteCard(note, onClick = {
-                        navController.navigate("edit_note_screen/${note.id}")
-                    })
-                }
-            }
-        }
+    // Filter notes by title
+    val filteredNotes = notes.filter {
+        it.title.contains(searchQuery, ignoreCase = true)
     }
+
+    Scaffold(
+        topBar = {
+            Column {
+                Header(navController)
+                HomeSubHeader(
+                    viewMode = viewMode,
+                    onToggleView = {
+                        viewMode = if (viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
+                    },
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = { searchQuery = it }
+                )
+            }
+        },
+        content = { paddingValues ->
+            Column(modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()) {
+
+                Button(
+                    onClick = { navController.navigate("create_note_screen") },
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text("New Note")
+                }
+
+                if (viewMode == ViewMode.LIST) {
+                    LazyColumn(modifier = Modifier.padding(16.dp)) {
+                        items(filteredNotes, key = { it.id }) { note ->
+                            NoteCard(note) {
+                                navController.navigate("edit_note_screen/${note.id}")
+                            }
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.padding(16.dp),
+                        contentPadding = PaddingValues(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredNotes, key = { it.id }) { note ->
+                            NoteCard(note) {
+                                navController.navigate("edit_note_screen/${note.id}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 // Settings Page
@@ -379,42 +458,28 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .imePadding()
-    ) {
-        // Top Header
-        Header(navController)
-
-        // Sub-header with Delete button
-        NoteSubHeader(onDeleteClick = {
-            viewModel.deleteNote(note.id)
-            navController.popBackStack()
-        })
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Column(modifier = Modifier.padding(16.dp))
-        {
-
-            // Styling buttons
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                ToggleButton("B", boldEnabled) {
-                    richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                }
-                ToggleButton("I", italicEnabled) {
-                    richTextState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                }
-                ToggleButton("U", underlineEnabled) {
-                    richTextState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline))
-                }
+    Scaffold(
+        topBar = {
+            Column {
+                Header(navController)
+                NoteSubHeader(
+                    onDeleteClick = {
+                        viewModel.deleteNote(note.id)
+                        navController.popBackStack()
+                    }
+                )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Note Title Input
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(16.dp)
+        ) {
+            // Title Field
             OutlinedTextField(
                 value = note.title,
                 onValueChange = {
@@ -426,19 +491,40 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                         viewModel.updateNote(note)
                     }
                 },
-                placeholder = { Text("Title") },
+                placeholder = { Text("Title (required for saving)") },
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Rich Text Editor for content
+            // Editor
             RichTextEditor(
                 state = richTextState,
+                placeholder = { Text("Notes go here") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(400.dp)
+                    .heightIn(min = 200.dp)
             )
+
+            val imePaddingModifier = Modifier
+                .imePadding() // Default ime padding for the keyboard
+                .padding(bottom = 200.dp)
+
+
+            // Style buttons
+            Row(modifier = imePaddingModifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End ) {
+                ToggleButton("B", boldEnabled) {
+                    richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                }
+                ToggleButton("I", italicEnabled) {
+                    richTextState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                }
+                ToggleButton("U", underlineEnabled) {
+                    richTextState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+                }
+            }
+
 
             Spacer(modifier = Modifier.height(160.dp))
 
@@ -456,6 +542,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             viewModel.updateNote(note)
         }
     }
+
 }
 
 
