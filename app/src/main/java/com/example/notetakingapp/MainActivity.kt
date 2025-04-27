@@ -58,9 +58,10 @@ import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.text.TextStyle
-
+import androidx.compose.ui.text.style.TextAlign
 
 
 // Data class for notes
@@ -71,16 +72,39 @@ data class Note(
     var content: String = ""
 )
 
+// Data class for user settings
+@Serializable
+data class Settings(
+    val viewMode: String = "LIST",
+    val sortBy: String = "ALPHABET",
+    val textStyleVisible: Boolean = true,
+    val searchBarVisible: Boolean = true,
+    val viewToggleVisible: Boolean = true,
+    val sortByVisible: Boolean = true,
+    val favouritesVisible: Boolean = true,
+    val readOnlyVisible: Boolean = true
+)
+
 enum class ViewMode { LIST, GRID }
+enum class SortBy { DATE, ALPHABET, RANDOM }
 
 class NotesViewModel(private val context: Context) : ViewModel() {
     private val _notes = MutableStateFlow<List<Note>>(emptyList())
     val notes: StateFlow<List<Note>> = _notes
 
+    private val _settings = MutableStateFlow(Settings())
+    val settings: StateFlow<Settings> = _settings
+
     init {
         viewModelScope.launch {
             context.notesDataStore.data.collect {
                 _notes.value = it
+            }
+        }
+
+        viewModelScope.launch {
+            context.settingsDataStore.data.collect { settings ->
+                _settings.value = settings
             }
         }
     }
@@ -110,6 +134,40 @@ class NotesViewModel(private val context: Context) : ViewModel() {
     private fun saveNotes(notes: List<Note>) {
         viewModelScope.launch {
             context.notesDataStore.updateData { notes }
+        }
+    }
+
+    // Function to toggle view mode between list and grid
+    fun toggleViewMode() {
+        viewModelScope.launch {
+            context.settingsDataStore.updateData { currentSettings ->
+                currentSettings.copy(
+                    viewMode = if (currentSettings.viewMode == "LIST") "GRID" else "LIST"
+                )
+            }
+        }
+    }
+
+    // Function to select which order the notes are presented in
+    fun toggleSortMode() {
+        viewModelScope.launch {
+            context.settingsDataStore.updateData { currentSettings ->
+                val newSortBy = when (SortBy.valueOf(currentSettings.sortBy)) {
+                    SortBy.DATE -> SortBy.ALPHABET
+                    SortBy.ALPHABET -> SortBy.RANDOM
+                    SortBy.RANDOM -> SortBy.DATE
+                }
+                currentSettings.copy(sortBy = newSortBy.name)
+            }
+        }
+    }
+
+    // Function to update user settings
+    fun updateSettings(update: (Settings) -> Settings) {
+        viewModelScope.launch {
+            context.settingsDataStore.updateData { currentSettings ->
+                update(currentSettings)
+            }
         }
     }
 }
@@ -142,7 +200,7 @@ fun AppNavigation() {
             HomePage(navController, notesViewModel)
         }
         composable("settings_screen") {
-            SettingsPage(navController)
+            SettingsPage(navController, notesViewModel)
         }
         composable("create_note_screen") {
             EditNotePage(navController, null, notesViewModel)
@@ -195,6 +253,8 @@ fun Header(navController: NavController) {
 fun HomeSubHeader(
         viewMode: ViewMode,
         onToggleView: () -> Unit,
+        sortBy: SortBy,
+        onToggleSort: () -> Unit,
         searchQuery: String,
         onSearchQueryChange: (String) -> Unit
     ) {
@@ -221,6 +281,15 @@ fun HomeSubHeader(
                     .weight(1f)
                     .height(40.dp)
             )
+
+            // Sort toggle button
+            IconButton(onClick = onToggleSort) {
+                Icon(
+                    imageVector = Icons.Default.ArrowCircleDown,
+                    contentDescription = "Toggle Note Sort Type",
+                    tint = Color.White
+                )
+            }
 
 
             Spacer(Modifier.width(8.dp))
@@ -293,6 +362,29 @@ fun CustomSearchBar(
     }
 }
 
+// Composable to allow users to change their settings
+@Composable
+fun SettingItem(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = title, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
 // Note card composable
 @Composable
 fun NoteCard(note: Note, onClick: () -> Unit) {
@@ -349,23 +441,29 @@ fun NoteSubHeader(
 @Composable
 fun HomePage(navController: NavController, viewModel: NotesViewModel) {
     val notes by viewModel.notes.collectAsState()
-    var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+    val settings by viewModel.settings.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
 
     // Filter notes by title
-    val filteredNotes = notes.filter {
-        it.title.contains(searchQuery, ignoreCase = true)
-    }
+    val filteredNotes = notes
+        .filter { it.title.contains(searchQuery, ignoreCase = true) }
+        .let { list ->
+            when (SortBy.valueOf(settings.sortBy)) {
+                SortBy.ALPHABET -> list.sortedBy { it.title.lowercase() }
+                SortBy.RANDOM -> list.shuffled()
+                SortBy.DATE -> list.shuffled()
+            }
+        }
 
     Scaffold(
         topBar = {
             Column {
                 Header(navController)
                 HomeSubHeader(
-                    viewMode = viewMode,
-                    onToggleView = {
-                        viewMode = if (viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST
-                    },
+                    viewMode = ViewMode.valueOf(settings.viewMode),
+                    onToggleView = { viewModel.toggleViewMode() },
+                    sortBy = SortBy.valueOf(settings.sortBy),
+                    onToggleSort = { viewModel.toggleSortMode() },
                     searchQuery = searchQuery,
                     onSearchQueryChange = { searchQuery = it }
                 )
@@ -383,7 +481,7 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
                     Text("New Note")
                 }
 
-                if (viewMode == ViewMode.LIST) {
+                if (ViewMode.valueOf(settings.viewMode) == ViewMode.LIST) {
                     LazyColumn(modifier = Modifier.padding(16.dp)) {
                         items(filteredNotes, key = { it.id }) { note ->
                             NoteCard(note) {
@@ -413,22 +511,81 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
 
 // Settings Page
 @Composable
-fun SettingsPage(navController: NavController) {
+fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
+    val settings by viewModel.settings.collectAsState()
+
     Column(modifier = Modifier.fillMaxSize()) {
-        //Header
+        // Header
         Header(navController)
 
-        //Main content
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.TopStart
+                .padding(16.dp)
         ) {
-            Text(text = "Settings go here")
+            Text(
+                text = "Enable and Disable Features",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.Gray,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 5.dp,bottom = 10.dp)
+                    .align(Alignment.CenterHorizontally),
+                textAlign = TextAlign.Center
+            )
+
+            // Checklist of settings
+            SettingItem(
+                title = "Show Text Style Options",
+                checked = settings.textStyleVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(textStyleVisible = newValue) }
+                }
+            )
+
+            SettingItem(
+                title = "Show Search Bar",
+                checked = settings.searchBarVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(searchBarVisible = newValue) }
+                }
+            )
+
+            SettingItem(
+                title = "Show List or Grid Toggle",
+                checked = settings.viewToggleVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(viewToggleVisible = newValue) }
+                }
+            )
+
+            SettingItem(
+                title = "Show Note Sorting Options",
+                checked = settings.sortByVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(sortByVisible = newValue) }
+                }
+            )
+
+            SettingItem(
+                title = "Show Favourites Feature",
+                checked = settings.favouritesVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(favouritesVisible = newValue) }
+                }
+            )
+
+            SettingItem(
+                title = "Show Read Only Mode Option",
+                checked = settings.readOnlyVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(readOnlyVisible = newValue) }
+                }
+            )
         }
     }
 }
+
 
 // Note taking page
 @Composable

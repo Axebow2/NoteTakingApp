@@ -22,10 +22,8 @@ val Context.notesDataStore: DataStore<List<Note>> by dataStore(
 // Custom serializer object for handling reading and writing of note data
 object NotesSerializer : Serializer<List<Note>> {
 
-    // Default value if no data
     override val defaultValue: List<Note> = emptyList()
 
-    // Function to read notes and deserialize them
     override suspend fun readFrom(input: InputStream): List<Note> {
         return try {
             val jsonString = input.readBytes().decodeToString()
@@ -35,7 +33,6 @@ object NotesSerializer : Serializer<List<Note>> {
         }
     }
 
-    // Function to write notes and serialize them
     override suspend fun writeTo(t: List<Note>, output: OutputStream) {
         val jsonString = Json.encodeToString(ListSerializer(Note.serializer()), t)
         output.write(jsonString.encodeToByteArray())
