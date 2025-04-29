@@ -1,5 +1,6 @@
 package com.example.notetakingapp
 
+import android.R
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -59,9 +60,17 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Date
+import java.util.Locale
+import kotlin.Boolean
 
 
 // Data class for notes
@@ -69,7 +78,9 @@ import androidx.compose.ui.text.style.TextAlign
 data class Note(
     val id: Long = System.currentTimeMillis(),
     var title: String = "",
-    var content: String = ""
+    var content: String = "",
+    val createdDate: Long = System.currentTimeMillis(),
+    var isFavourite: Boolean = false
 )
 
 // Data class for user settings
@@ -82,13 +93,15 @@ data class Settings(
     val viewToggleVisible: Boolean = true,
     val sortByVisible: Boolean = true,
     val favouritesVisible: Boolean = true,
-    val readOnlyVisible: Boolean = true
+    val readOnlyVisible: Boolean = true,
+    val dateVisible: Boolean = true
 )
 
 enum class ViewMode { LIST, GRID }
-enum class SortBy { DATE, ALPHABET, RANDOM }
+enum class SortBy { DATEDES, DATEASC,  ALPHABET, RANDOM }
 
 class NotesViewModel(private val context: Context) : ViewModel() {
+
     private val _notes = MutableStateFlow<List<Note>>(emptyList())
     val notes: StateFlow<List<Note>> = _notes
 
@@ -130,6 +143,7 @@ class NotesViewModel(private val context: Context) : ViewModel() {
     // Function to find a note by it's unique id
     fun getNoteById(id: Long): Note? = _notes.value.find { it.id == id }
 
+
     // Function to save notes to data store
     private fun saveNotes(notes: List<Note>) {
         viewModelScope.launch {
@@ -153,14 +167,17 @@ class NotesViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             context.settingsDataStore.updateData { currentSettings ->
                 val newSortBy = when (SortBy.valueOf(currentSettings.sortBy)) {
-                    SortBy.DATE -> SortBy.ALPHABET
+                    SortBy.DATEDES -> SortBy.DATEASC
+                    SortBy.DATEASC -> SortBy.ALPHABET
                     SortBy.ALPHABET -> SortBy.RANDOM
-                    SortBy.RANDOM -> SortBy.DATE
+                    SortBy.RANDOM -> SortBy.DATEDES
                 }
                 currentSettings.copy(sortBy = newSortBy.name)
             }
         }
     }
+
+
 
     // Function to update user settings
     fun updateSettings(update: (Settings) -> Settings) {
@@ -256,7 +273,10 @@ fun HomeSubHeader(
         sortBy: SortBy,
         onToggleSort: () -> Unit,
         searchQuery: String,
-        onSearchQueryChange: (String) -> Unit
+        onSearchQueryChange: (String) -> Unit,
+        isSearchVisible: Boolean,
+        isViewToggleVisible: Boolean,
+        isSortByVisible: Boolean
     ) {
     Box(
         modifier = Modifier
@@ -274,6 +294,7 @@ fun HomeSubHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Custom search bar
+            if (isSearchVisible) {
             CustomSearchBar(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
@@ -281,8 +302,10 @@ fun HomeSubHeader(
                     .weight(1f)
                     .height(40.dp)
             )
+            }
 
             // Sort toggle button
+            if (isSortByVisible) {
             IconButton(onClick = onToggleSort) {
                 Icon(
                     imageVector = Icons.Default.ArrowCircleDown,
@@ -290,17 +313,20 @@ fun HomeSubHeader(
                     tint = Color.White
                 )
             }
+            }
 
 
             Spacer(Modifier.width(8.dp))
 
             // Toggle view button
+            if (isViewToggleVisible) {
             IconButton(onClick = onToggleView) {
                 Icon(
                     imageVector = if (viewMode == ViewMode.LIST) Icons.Filled.Menu else Icons.Filled.GridView,
                     contentDescription = "Toggle View",
                     tint = Color.White
                 )
+            }
             }
         }
     }
@@ -387,16 +413,54 @@ fun SettingItem(
 
 // Note card composable
 @Composable
-fun NoteCard(note: Note, onClick: () -> Unit) {
+fun NoteCard(note: Note, settings: Settings, onClick: () -> Unit, onFavouriteClick: (Note) -> Unit) {
+    val formatter = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val formattedDate = formatter.format(Date(note.createdDate))
+
+    // Colours for favourite state
+    val cardBackgroundColor = if (note.isFavourite && settings.favouritesVisible) {
+        Color(0xFFffce04) // Golden colour for favourite
+    } else {
+        Color(0xFFDCDCDC) // Default light grey
+    }
+
+
+
     Card(
+        colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(4.dp),
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = note.title, style = MaterialTheme.typography.titleMedium)
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Favourite Button on the left
+            if (settings.favouritesVisible) {
+                IconButton(
+                    onClick = { onFavouriteClick(note) },
+                    modifier = Modifier.padding(end = 8.dp) // Minimal padding to the right of the icon
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = "Favourite",
+                        tint = if (note.isFavourite) Color(0xFFf3a50c) else Color.Gray,
+                        modifier = Modifier.width(45.dp).height(45.dp)
+                    )
+                }
+            }
+
+            // Column for title and date
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = note.title, style = MaterialTheme.typography.titleMedium)
+                if (settings.dateVisible) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = formattedDate,
+                        style = MaterialTheme.typography.titleSmall.copy(color = Color.Gray)
+                    )
+                }
+            }
         }
     }
 }
@@ -404,7 +468,8 @@ fun NoteCard(note: Note, onClick: () -> Unit) {
 // Note page specific sub header
 @Composable
 fun NoteSubHeader(
-    onDeleteClick: (() -> Unit)? = null
+    onDeleteClick: (() -> Unit)? = null,
+    textStyleVisible: Boolean
 ) {
     Box(
         modifier = Modifier
@@ -440,6 +505,7 @@ fun NoteSubHeader(
 // Home Page
 @Composable
 fun HomePage(navController: NavController, viewModel: NotesViewModel) {
+
     val notes by viewModel.notes.collectAsState()
     val settings by viewModel.settings.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -451,7 +517,8 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
             when (SortBy.valueOf(settings.sortBy)) {
                 SortBy.ALPHABET -> list.sortedBy { it.title.lowercase() }
                 SortBy.RANDOM -> list.shuffled()
-                SortBy.DATE -> list.shuffled()
+                SortBy.DATEDES -> list.sortedByDescending { it.createdDate }
+                SortBy.DATEASC -> list.sortedBy { it.createdDate }
             }
         }
 
@@ -465,7 +532,10 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
                     sortBy = SortBy.valueOf(settings.sortBy),
                     onToggleSort = { viewModel.toggleSortMode() },
                     searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it }
+                    onSearchQueryChange = { searchQuery = it },
+                    isSearchVisible = settings.searchBarVisible,
+                    isViewToggleVisible = settings.viewToggleVisible,
+                    isSortByVisible = settings.sortByVisible
                 )
             }
         },
@@ -484,9 +554,12 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
                 if (ViewMode.valueOf(settings.viewMode) == ViewMode.LIST) {
                     LazyColumn(modifier = Modifier.padding(16.dp)) {
                         items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(note) {
+                            NoteCard(note = note, settings = settings, onClick = {
                                 navController.navigate("edit_note_screen/${note.id}")
-                            }
+                            }, onFavouriteClick = { toggledNote ->
+                                val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
+                                viewModel.updateNote(updatedNote) // Update the note's favourite status
+                            })
                         }
                     }
                 } else {
@@ -498,9 +571,12 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(note) {
+                            NoteCard(note = note, settings = settings, onClick = {
                                 navController.navigate("edit_note_screen/${note.id}")
-                            }
+                            }, onFavouriteClick = { toggledNote ->
+                                val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
+                                viewModel.updateNote(updatedNote) // Update the note's favourite status
+                            })
                         }
                     }
                 }
@@ -513,6 +589,7 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
 @Composable
 fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
     val settings by viewModel.settings.collectAsState()
+
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header
@@ -582,6 +659,14 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                     viewModel.updateSettings { it.copy(readOnlyVisible = newValue) }
                 }
             )
+
+            SettingItem(
+                title = "Show Dates Under Notes",
+                checked = settings.dateVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(dateVisible = newValue) }
+                }
+            )
         }
     }
 }
@@ -594,6 +679,8 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
     val isNewNote = existingNote == null
     var note by remember { mutableStateOf(existingNote ?: Note()) }
     var hasBeenAdded by remember { mutableStateOf(!isNewNote) }
+    val settings by viewModel.settings.collectAsState()
+
 
     val richTextState = rememberRichTextState()
 
@@ -623,7 +710,8 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                     onDeleteClick = {
                         viewModel.deleteNote(note.id)
                         navController.popBackStack()
-                    }
+                    } ,
+                    textStyleVisible = settings.textStyleVisible
                 )
             }
         }
@@ -669,6 +757,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
 
 
             // Style buttons
+            if (settings.textStyleVisible) {
             Row(modifier = imePaddingModifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End ) {
                 ToggleButton("B", boldEnabled) {
@@ -680,6 +769,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                 ToggleButton("U", underlineEnabled) {
                     richTextState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline))
                 }
+            }
             }
 
 
