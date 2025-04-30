@@ -60,11 +60,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import com.example.notetakingapp.ui.theme.noteColors
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -80,7 +82,8 @@ data class Note(
     var title: String = "",
     var content: String = "",
     val createdDate: Long = System.currentTimeMillis(),
-    var isFavourite: Boolean = false
+    var isFavourite: Boolean = false,
+    var colorIndex: Int = 0
 )
 
 // Data class for user settings
@@ -88,13 +91,15 @@ data class Note(
 data class Settings(
     val viewMode: String = "LIST",
     val sortBy: String = "ALPHABET",
+    val darkMode: Boolean = false,
     val textStyleVisible: Boolean = true,
     val searchBarVisible: Boolean = true,
     val viewToggleVisible: Boolean = true,
     val sortByVisible: Boolean = true,
     val favouritesVisible: Boolean = true,
     val readOnlyVisible: Boolean = true,
-    val dateVisible: Boolean = true
+    val dateVisible: Boolean = true,
+    val colorVisible: Boolean = true
 )
 
 enum class ViewMode { LIST, GRID }
@@ -231,12 +236,13 @@ fun AppNavigation() {
 
 // Header for all pages
 @Composable
-fun Header(navController: NavController) {
+fun Header(navController: NavController, viewModel: NotesViewModel) {
+    val settings by viewModel.settings.collectAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(68.dp)
-            .background(Color(0xFF1e3e73))
+            .background(if (settings.darkMode){Color(0xFF2F2F2F)} else {Color(0xFF1e3e73) })
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -274,10 +280,9 @@ fun HomeSubHeader(
         onToggleSort: () -> Unit,
         searchQuery: String,
         onSearchQueryChange: (String) -> Unit,
-        isSearchVisible: Boolean,
-        isViewToggleVisible: Boolean,
-        isSortByVisible: Boolean
+        viewModel: NotesViewModel
     ) {
+    val settings by viewModel.settings.collectAsState()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -289,12 +294,12 @@ fun HomeSubHeader(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF435f8c))
+                .background(if (settings.darkMode){Color(0xFF494A4A)} else {Color(0xFF435f8c) })
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Custom search bar
-            if (isSearchVisible) {
+            if (settings.searchBarVisible) {
             CustomSearchBar(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
@@ -305,7 +310,7 @@ fun HomeSubHeader(
             }
 
             // Sort toggle button
-            if (isSortByVisible) {
+            if (settings.sortByVisible) {
             IconButton(onClick = onToggleSort) {
                 Icon(
                     imageVector = Icons.Default.ArrowCircleDown,
@@ -319,7 +324,7 @@ fun HomeSubHeader(
             Spacer(Modifier.width(8.dp))
 
             // Toggle view button
-            if (isViewToggleVisible) {
+            if (settings.viewToggleVisible) {
             IconButton(onClick = onToggleView) {
                 Icon(
                     imageVector = if (viewMode == ViewMode.LIST) Icons.Filled.Menu else Icons.Filled.GridView,
@@ -393,8 +398,10 @@ fun CustomSearchBar(
 fun SettingItem(
     title: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    viewModel: NotesViewModel
 ) {
+    val settings by viewModel.settings.collectAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -404,10 +411,18 @@ fun SettingItem(
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            colors = CheckboxDefaults.colors(
+                checkmarkColor = Color.White,
+                uncheckedColor = if (settings.darkMode){Color.LightGray} else {Color.DarkGray },
+                checkedColor = if (settings.darkMode){Color.DarkGray} else {Color.LightGray }
+            )
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = title, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (settings.darkMode){Color.White} else {Color.Black })
     }
 }
 
@@ -421,10 +436,11 @@ fun NoteCard(note: Note, settings: Settings, onClick: () -> Unit, onFavouriteCli
     val cardBackgroundColor = if (note.isFavourite && settings.favouritesVisible) {
         Color(0xFFffce04) // Golden colour for favourite
     } else {
-        Color(0xFFDCDCDC) // Default light grey
+        if (settings.colorVisible) {
+        noteColors.getOrElse(note.colorIndex) { noteColors[0] }
+        }
+        else {Color(0xFFDCDCDC)}
     }
-
-
 
     Card(
         colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
@@ -439,12 +455,12 @@ fun NoteCard(note: Note, settings: Settings, onClick: () -> Unit, onFavouriteCli
             if (settings.favouritesVisible) {
                 IconButton(
                     onClick = { onFavouriteClick(note) },
-                    modifier = Modifier.padding(end = 8.dp) // Minimal padding to the right of the icon
+                    modifier = Modifier.padding(end = 8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Star,
                         contentDescription = "Favourite",
-                        tint = if (note.isFavourite) Color(0xFFf3a50c) else Color.Gray,
+                        tint = if (note.isFavourite) Color(0xFFf3a50c) else if (settings.darkMode){Color.DarkGray} else {Color.Gray },
                         modifier = Modifier.width(45.dp).height(45.dp)
                     )
                 }
@@ -469,13 +485,15 @@ fun NoteCard(note: Note, settings: Settings, onClick: () -> Unit, onFavouriteCli
 @Composable
 fun NoteSubHeader(
     onDeleteClick: (() -> Unit)? = null,
-    textStyleVisible: Boolean
+    onColorCycle: (() -> Unit)? = null,
+    viewModel: NotesViewModel
 ) {
+    val settings by viewModel.settings.collectAsState()
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .background(Color(0xFF435f8c)),
+            .background(if (settings.darkMode){Color(0xFF494A4A)} else {Color(0xFF435f8c) }),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
@@ -485,6 +503,18 @@ fun NoteSubHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
+            // Cycle Color Button
+            if (settings.colorVisible) {
+                if (onColorCycle != null) {
+                    IconButton(onClick = onColorCycle) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = "Cycle Color",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
 
 
             // Delete button (if available)
@@ -525,7 +555,7 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
     Scaffold(
         topBar = {
             Column {
-                Header(navController)
+                Header(navController, viewModel)
                 HomeSubHeader(
                     viewMode = ViewMode.valueOf(settings.viewMode),
                     onToggleView = { viewModel.toggleViewMode() },
@@ -533,16 +563,17 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
                     onToggleSort = { viewModel.toggleSortMode() },
                     searchQuery = searchQuery,
                     onSearchQueryChange = { searchQuery = it },
-                    isSearchVisible = settings.searchBarVisible,
-                    isViewToggleVisible = settings.viewToggleVisible,
-                    isSortByVisible = settings.sortByVisible
+                    viewModel = viewModel
                 )
             }
         },
         content = { paddingValues ->
             Column(modifier = Modifier
                 .padding(paddingValues)
-                .fillMaxSize()) {
+                .fillMaxSize()
+                .background(if (settings.darkMode){Color(0xFF737373)} else {Color(0xFFFFFFFF) }))
+            {
+
 
                 Button(
                     onClick = { navController.navigate("create_note_screen") },
@@ -591,9 +622,9 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
     val settings by viewModel.settings.collectAsState()
 
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().background(if (settings.darkMode){Color(0xFF737373)} else {Color(0xFFFFFFFF) })) {
         // Header
-        Header(navController)
+        Header(navController, viewModel)
 
         Column(
             modifier = Modifier
@@ -603,7 +634,7 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
             Text(
                 text = "Enable and Disable Features",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.Gray,
+                color = if(settings.darkMode){Color.White}else{Color.Gray},
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 5.dp,bottom = 10.dp)
@@ -613,11 +644,21 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
 
             // Checklist of settings
             SettingItem(
+                title = "Enable Dark Mode",
+                checked = settings.darkMode,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(darkMode = newValue) }
+                },
+                viewModel = viewModel
+            )
+
+            SettingItem(
                 title = "Show Text Style Options",
                 checked = settings.textStyleVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(textStyleVisible = newValue) }
-                }
+                },
+                viewModel = viewModel
             )
 
             SettingItem(
@@ -625,7 +666,8 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 checked = settings.searchBarVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(searchBarVisible = newValue) }
-                }
+                },
+                viewModel = viewModel
             )
 
             SettingItem(
@@ -633,7 +675,8 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 checked = settings.viewToggleVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(viewToggleVisible = newValue) }
-                }
+                },
+                viewModel = viewModel
             )
 
             SettingItem(
@@ -641,7 +684,8 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 checked = settings.sortByVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(sortByVisible = newValue) }
-                }
+                },
+                viewModel = viewModel
             )
 
             SettingItem(
@@ -649,7 +693,8 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 checked = settings.favouritesVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(favouritesVisible = newValue) }
-                }
+                },
+                viewModel = viewModel
             )
 
             SettingItem(
@@ -657,7 +702,8 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 checked = settings.readOnlyVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(readOnlyVisible = newValue) }
-                }
+                },
+                viewModel = viewModel
             )
 
             SettingItem(
@@ -665,7 +711,17 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 checked = settings.dateVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(dateVisible = newValue) }
-                }
+                },
+                viewModel = viewModel
+            )
+
+            SettingItem(
+                title = "Show Custom Note Colors",
+                checked = settings.colorVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(colorVisible = newValue) }
+                },
+                viewModel = viewModel
             )
         }
     }
@@ -681,8 +737,34 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
     var hasBeenAdded by remember { mutableStateOf(!isNewNote) }
     val settings by viewModel.settings.collectAsState()
 
+    val currentColorIndex = note.colorIndex
+    var editNoteColors = listOf(
+        Color(0xFFFFFFFF), // Default white
+        Color(0x80FFF9C4), // 50% Opacity Yellow
+        Color(0x80FFCCBC), // 50% Opacity Orange
+        Color(0x80C8E6C9), // 50% Opacity Green
+        Color(0x80BBDEFB), // 50% Opacity Blue
+        Color(0x80E1BEE7), // 50% Opacity Purple
+        Color(0x80F89494), // 50% Opacity Red
+        Color(0x80B3E5FC), // 50% Opacity  Cyan
+        Color(0x80FFCDD2), // 50% Opacity  Pink
+    )
+    if (settings.darkMode){
+        editNoteColors = listOf(
+            Color(0xFF737373), // Default grey
+            Color(0xFFB9B590), // 50% Darker Yellow
+            Color(0xFFB49287), // 50% Darker Orange
+            Color(0xFF92A893), // 50% Darker Green
+            Color(0xFF8CA6BB), // 50% Darker Blue
+            Color(0xFFA58BA9), // 50% Darker Purple
+            Color(0xFFAD6767), // 50% Darker Red
+            Color(0xFF7797A6), // 50% Darker Cyan
+            Color(0xFFA8888C), // 50% Darker Pink
+        )
+    }
 
     val richTextState = rememberRichTextState()
+
 
     var boldEnabled by remember { mutableStateOf(false) }
     var italicEnabled by remember { mutableStateOf(false) }
@@ -705,13 +787,19 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
     Scaffold(
         topBar = {
             Column {
-                Header(navController)
+                Header(navController, viewModel)
                 NoteSubHeader(
                     onDeleteClick = {
                         viewModel.deleteNote(note.id)
                         navController.popBackStack()
                     } ,
-                    textStyleVisible = settings.textStyleVisible
+                    onColorCycle = {
+                        val newIndex = (currentColorIndex + 1) % noteColors.size
+                        val updatedNote = note.copy(colorIndex = newIndex)
+                        viewModel.updateNote(updatedNote)
+                        note = updatedNote
+                    },
+                    viewModel = viewModel
                 )
             }
         }
@@ -720,6 +808,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .background( if (settings.colorVisible) {editNoteColors[currentColorIndex]} else {Color(0xFFFFFFFF)})
                 .verticalScroll(rememberScrollState())
                 .imePadding()
                 .padding(16.dp)
