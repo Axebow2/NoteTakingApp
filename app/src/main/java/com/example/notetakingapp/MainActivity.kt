@@ -64,9 +64,13 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.example.notetakingapp.ui.theme.noteColors
+import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorColors
+import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -428,18 +432,24 @@ fun SettingItem(
 
 // Note card composable
 @Composable
-fun NoteCard(note: Note, settings: Settings, onClick: () -> Unit, onFavouriteClick: (Note) -> Unit) {
+fun NoteCard(
+    note: Note,
+    settings: Settings,
+    viewMode: ViewMode,
+    onClick: () -> Unit,
+    onFavouriteClick: (Note) -> Unit
+) {
     val formatter = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     val formattedDate = formatter.format(Date(note.createdDate))
 
-    // Colours for favourite state
     val cardBackgroundColor = if (note.isFavourite && settings.favouritesVisible) {
         Color(0xFFffce04) // Golden colour for favourite
     } else {
         if (settings.colorVisible) {
-        noteColors.getOrElse(note.colorIndex) { noteColors[0] }
+            noteColors.getOrElse(note.colorIndex) { noteColors[0] }
+        } else {
+            Color(0xFFDCDCDC) // Default colour
         }
-        else {Color(0xFFDCDCDC)}
     }
 
     Card(
@@ -450,31 +460,73 @@ fun NoteCard(note: Note, settings: Settings, onClick: () -> Unit, onFavouriteCli
             .padding(4.dp),
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Favourite Button on the left
-            if (settings.favouritesVisible) {
-                IconButton(
-                    onClick = { onFavouriteClick(note) },
-                    modifier = Modifier.padding(end = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        contentDescription = "Favourite",
-                        tint = if (note.isFavourite) Color(0xFFf3a50c) else if (settings.darkMode){Color.DarkGray} else {Color.Gray },
-                        modifier = Modifier.width(45.dp).height(45.dp)
-                    )
-                }
-            }
+        if (viewMode == ViewMode.GRID) {
+            // Grid view layout
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (settings.favouritesVisible) {
 
-            // Column for title and date
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = note.title, style = MaterialTheme.typography.titleMedium)
+                    IconButton(
+                        onClick = { onFavouriteClick(note) },
+                        modifier = Modifier.size(45.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = "Favourite",
+                            tint = if (note.isFavourite) Color(0xFFf3a50c) else if (settings.darkMode) Color.DarkGray else Color.Gray,
+                            modifier = Modifier.size(45.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = note.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    maxLines = 2
+                )
+
                 if (settings.dateVisible) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = formattedDate,
                         style = MaterialTheme.typography.titleSmall.copy(color = Color.Gray)
                     )
+                }
+            }
+        } else {
+            // List view layout
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (settings.favouritesVisible) {
+                    IconButton(
+                        onClick = { onFavouriteClick(note) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = "Favourite",
+                            tint = if (note.isFavourite) Color(0xFFf3a50c) else if (settings.darkMode) Color.DarkGray else Color.Gray,
+                            modifier = Modifier
+                                .width(45.dp)
+                                .height(45.dp)
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = note.title, style = MaterialTheme.typography.titleMedium)
+                    if (settings.dateVisible) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.titleSmall.copy(color = Color.Gray)
+                        )
+                    }
                 }
             }
         }
@@ -535,7 +587,6 @@ fun NoteSubHeader(
 // Home Page
 @Composable
 fun HomePage(navController: NavController, viewModel: NotesViewModel) {
-
     val notes by viewModel.notes.collectAsState()
     val settings by viewModel.settings.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -575,39 +626,62 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
             {
 
 
-                Button(
-                    onClick = { navController.navigate("create_note_screen") },
-                    modifier = Modifier.padding(16.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("New Note")
+                    Button(
+                        onClick = { navController.navigate("create_note_screen") },
+                        shape = RoundedCornerShape(20),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (settings.darkMode){Color(0xFF494A4A)} else {Color(0xFF435f8c) },
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .height(50.dp)
+                            .width(130.dp)
+                    ) {
+                        Text("New Note",
+                        style = TextStyle(fontSize = 16.sp))
+                    }
                 }
 
                 if (ViewMode.valueOf(settings.viewMode) == ViewMode.LIST) {
-                    LazyColumn(modifier = Modifier.padding(16.dp)) {
+                    LazyColumn(modifier = Modifier.padding(1.dp)) {
                         items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(note = note, settings = settings, onClick = {
-                                navController.navigate("edit_note_screen/${note.id}")
-                            }, onFavouriteClick = { toggledNote ->
-                                val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
-                                viewModel.updateNote(updatedNote) // Update the note's favourite status
-                            })
+                            NoteCard(
+                                note = note,
+                                settings = settings,
+                                viewMode = ViewMode.LIST,
+                                onClick = { navController.navigate("edit_note_screen/${note.id}") },
+                                onFavouriteClick = { toggledNote ->
+                                    val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
+                                    viewModel.updateNote(updatedNote)
+                                }
+                            )
                         }
                     }
                 } else {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(8.dp),
                         contentPadding = PaddingValues(4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(note = note, settings = settings, onClick = {
-                                navController.navigate("edit_note_screen/${note.id}")
-                            }, onFavouriteClick = { toggledNote ->
-                                val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
-                                viewModel.updateNote(updatedNote) // Update the note's favourite status
-                            })
+                            NoteCard(
+                                note = note,
+                                settings = settings,
+                                viewMode = ViewMode.GRID,
+                                onClick = { navController.navigate("edit_note_screen/${note.id}") },
+                                onFavouriteClick = { toggledNote ->
+                                    val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
+                                    viewModel.updateNote(updatedNote)
+                                }
+                            )
                         }
                     }
                 }
@@ -643,6 +717,8 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
             )
 
             // Checklist of settings
+
+            // Dark Mode Settings
             SettingItem(
                 title = "Enable Dark Mode",
                 checked = settings.darkMode,
@@ -652,14 +728,7 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 viewModel = viewModel
             )
 
-            SettingItem(
-                title = "Show Text Style Options",
-                checked = settings.textStyleVisible,
-                onCheckedChange = { newValue ->
-                    viewModel.updateSettings { it.copy(textStyleVisible = newValue) }
-                },
-                viewModel = viewModel
-            )
+            // Home Page Settings
 
             SettingItem(
                 title = "Show Search Bar",
@@ -698,19 +767,22 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
             )
 
             SettingItem(
-                title = "Show Read Only Mode Option",
-                checked = settings.readOnlyVisible,
-                onCheckedChange = { newValue ->
-                    viewModel.updateSettings { it.copy(readOnlyVisible = newValue) }
-                },
-                viewModel = viewModel
-            )
-
-            SettingItem(
                 title = "Show Dates Under Notes",
                 checked = settings.dateVisible,
                 onCheckedChange = { newValue ->
                     viewModel.updateSettings { it.copy(dateVisible = newValue) }
+                },
+                viewModel = viewModel
+            )
+
+
+            // Note Taking Page Settings
+
+            SettingItem(
+                title = "Show Text Style Options",
+                checked = settings.textStyleVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(textStyleVisible = newValue) }
                 },
                 viewModel = viewModel
             )
@@ -723,6 +795,16 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
                 },
                 viewModel = viewModel
             )
+
+            SettingItem(
+                title = "Show Read Only Mode Option",
+                checked = settings.readOnlyVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(readOnlyVisible = newValue) }
+                },
+                viewModel = viewModel
+            )
+
         }
     }
 }
@@ -814,20 +896,36 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                 .padding(16.dp)
         ) {
             // Title Field
-            OutlinedTextField(
-                value = note.title,
-                onValueChange = {
-                    note = note.copy(title = it)
-                    if (!hasBeenAdded) {
-                        viewModel.addNote(note)
-                        hasBeenAdded = true
-                    } else {
-                        viewModel.updateNote(note)
-                    }
-                },
-                placeholder = { Text("Title (required for saving)") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            Box(
+                modifier = Modifier
+                    .shadow(4.dp, RoundedCornerShape(8.dp))
+                    .fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = note.title,
+                    onValueChange = {
+                        note = note.copy(title = it)
+                        if (it.isNotBlank()) {
+                            if (!hasBeenAdded) {
+                                viewModel.addNote(note)
+                                hasBeenAdded = true
+                            } else {
+                                viewModel.updateNote(note)
+                            }
+                        }
+                    },
+                    placeholder = { Text("Title (required for saving)", fontSize = 16.sp) },
+                    textStyle = TextStyle(color = Color.Black, fontSize = 16.sp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFe1e2ec),
+                        unfocusedContainerColor = Color(0xFFe1e2ec),
+                        focusedIndicatorColor = Color(0xFFe1e2ec),
+                        unfocusedIndicatorColor = Color(0xFFe1e2ec),
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -841,7 +939,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             )
 
             val imePaddingModifier = Modifier
-                .imePadding() // Default ime padding for the keyboard
+                .imePadding()
                 .padding(bottom = 200.dp)
 
 
@@ -871,11 +969,13 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
     LaunchedEffect(richTextState.toHtml()) {
         val htmlContent = richTextState.toHtml()
         note = note.copy(content = htmlContent)
-        if (!hasBeenAdded) {
-            viewModel.addNote(note)
-            hasBeenAdded = true
-        } else {
-            viewModel.updateNote(note)
+        if (note.title.isNotBlank()) {
+            if (!hasBeenAdded) {
+                viewModel.addNote(note)
+                hasBeenAdded = true
+            } else {
+                viewModel.updateNote(note)
+            }
         }
     }
 
