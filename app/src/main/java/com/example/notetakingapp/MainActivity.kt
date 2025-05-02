@@ -55,28 +55,27 @@ import androidx.compose.ui.text.style.TextDecoration
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.example.notetakingapp.ui.theme.noteColors
-import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorColors
-import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import kotlin.Boolean
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
 
 
 // Data class for notes
@@ -298,49 +297,88 @@ fun HomeSubHeader(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(if (settings.darkMode){Color(0xFF494A4A)} else {Color(0xFF435f8c) })
+                .background(
+                    if (settings.darkMode) {
+                        Color(0xFF494A4A)
+                    } else {
+                        Color(0xFF435f8c)
+                    }
+                )
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Custom search bar
-            if (settings.searchBarVisible) {
-            CustomSearchBar(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(40.dp)
-            )
+            Box(modifier = Modifier.weight(1f)) {
+                if (settings.searchBarVisible) {
+                    CustomSearchBar(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                    )
+                }
             }
 
-            // Sort toggle button
-            if (settings.sortByVisible) {
-            IconButton(onClick = onToggleSort) {
-                Icon(
-                    imageVector = Icons.Default.ArrowCircleDown,
-                    contentDescription = "Toggle Note Sort Type",
-                    tint = Color.White
-                )
-            }
-            }
+            Spacer(Modifier.width(20.dp))
 
+            // Row to store buttons
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                if (settings.sortByVisible) {
+                    val label = when (sortBy) {
+                        SortBy.ALPHABET -> "A"
+                        SortBy.RANDOM -> "R"
+                        SortBy.DATEDES, SortBy.DATEASC -> "D"
+                    }
 
-            Spacer(Modifier.width(8.dp))
+                    val sortIcon = when (sortBy) {
+                        SortBy.ALPHABET -> Icons.Default.KeyboardArrowDown
+                        SortBy.RANDOM -> Icons.Default.Casino
+                        SortBy.DATEDES -> Icons.Default.KeyboardDoubleArrowDown
+                        SortBy.DATEASC -> Icons.Default.KeyboardDoubleArrowUp
+                    }
 
-            // Toggle view button
-            if (settings.viewToggleVisible) {
-            IconButton(onClick = onToggleView) {
-                Icon(
-                    imageVector = if (viewMode == ViewMode.LIST) Icons.Filled.Menu else Icons.Filled.GridView,
-                    contentDescription = "Toggle View",
-                    tint = Color.White
-                )
-            }
+                    // Toggle note sort by
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        IconButton(
+                            onClick = onToggleSort,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = sortIcon,
+                                contentDescription = "Toggle Note Sort Type",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Toggle list or grid view
+                if (settings.viewToggleVisible) {
+                    IconButton(onClick = onToggleView) {
+                        Icon(
+                            imageVector = if (viewMode == ViewMode.LIST) Icons.Filled.Menu else Icons.Filled.GridView,
+                            contentDescription = "Toggle View",
+                            tint = Color.White
+                        )
+                    }
+                }
             }
         }
     }
 }
-
 // Button to toggle different text types
 @Composable
 fun ToggleButton(text: String, enabled: Boolean, onClick: () -> Unit) {
@@ -619,76 +657,74 @@ fun HomePage(navController: NavController, viewModel: NotesViewModel) {
             }
         },
         content = { paddingValues ->
-            Column(modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
-                .background(if (settings.darkMode){Color(0xFF737373)} else {Color(0xFFFFFFFF) }))
-            {
-
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Button(
-                        onClick = { navController.navigate("create_note_screen") },
-                        shape = RoundedCornerShape(20),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (settings.darkMode){Color(0xFF494A4A)} else {Color(0xFF435f8c) },
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .height(50.dp)
-                            .width(130.dp)
-                    ) {
-                        Text("New Note",
-                        style = TextStyle(fontSize = 16.sp))
+            Box(
+                modifier = Modifier
+                    .padding(paddingValues)
+                    .fillMaxSize()
+                    .background(if (settings.darkMode) Color(0xFF737373) else Color(0xFFFFFFFF))
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Display notes in list view
+                    if (ViewMode.valueOf(settings.viewMode) == ViewMode.LIST) {
+                        LazyColumn(modifier = Modifier.padding(1.dp)) {
+                            items(filteredNotes, key = { it.id }) { note ->
+                                NoteCard(
+                                    note = note,
+                                    settings = settings,
+                                    viewMode = ViewMode.LIST,
+                                    onClick = { navController.navigate("edit_note_screen/${note.id}") },
+                                    onFavouriteClick = { toggledNote ->
+                                        val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
+                                        viewModel.updateNote(updatedNote)
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        // Display notes in grid view
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.padding(8.dp),
+                            contentPadding = PaddingValues(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(filteredNotes, key = { it.id }) { note ->
+                                NoteCard(
+                                    note = note,
+                                    settings = settings,
+                                    viewMode = ViewMode.GRID,
+                                    onClick = { navController.navigate("edit_note_screen/${note.id}") },
+                                    onFavouriteClick = { toggledNote ->
+                                        val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
+                                        viewModel.updateNote(updatedNote)
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
-                if (ViewMode.valueOf(settings.viewMode) == ViewMode.LIST) {
-                    LazyColumn(modifier = Modifier.padding(1.dp)) {
-                        items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(
-                                note = note,
-                                settings = settings,
-                                viewMode = ViewMode.LIST,
-                                onClick = { navController.navigate("edit_note_screen/${note.id}") },
-                                onFavouriteClick = { toggledNote ->
-                                    val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
-                                    viewModel.updateNote(updatedNote)
-                                }
-                            )
-                        }
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.padding(8.dp),
-                        contentPadding = PaddingValues(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(
-                                note = note,
-                                settings = settings,
-                                viewMode = ViewMode.GRID,
-                                onClick = { navController.navigate("edit_note_screen/${note.id}") },
-                                onFavouriteClick = { toggledNote ->
-                                    val updatedNote = toggledNote.copy(isFavourite = !toggledNote.isFavourite)
-                                    viewModel.updateNote(updatedNote)
-                                }
-                            )
-                        }
-                    }
+                // New note button
+                Button(
+                    onClick = { navController.navigate("create_note_screen") },
+                    shape = RoundedCornerShape(20),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (settings.darkMode) Color(0xFF494A4A) else Color(0xFF435f8c),
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(9.dp)
+                        .height(65.dp)
+                        .width(140.dp)
+                ) {
+                    Text("New Note +", style = TextStyle(fontSize = 16.sp))
                 }
             }
-        }
-    )
+        })
 }
+
 
 // Settings Page
 @Composable
