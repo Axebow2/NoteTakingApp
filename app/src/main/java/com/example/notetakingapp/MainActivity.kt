@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -56,8 +57,11 @@ import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.TextFieldDefaults
@@ -73,9 +77,16 @@ import java.util.Date
 import java.util.Locale
 import kotlin.Boolean
 import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.FormatAlignCenter
+import androidx.compose.material.icons.filled.FormatAlignLeft
+import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.ParagraphStyle
 
 
 // Data class for notes
@@ -86,7 +97,8 @@ data class Note(
     var content: String = "",
     val createdDate: Long = System.currentTimeMillis(),
     var isFavourite: Boolean = false,
-    var colorIndex: Int = 0
+    var colorIndex: Int = 0,
+    var isReadOnly: Boolean = false
 )
 
 // Data class for user settings
@@ -102,7 +114,8 @@ data class Settings(
     val favouritesVisible: Boolean = true,
     val readOnlyVisible: Boolean = true,
     val dateVisible: Boolean = true,
-    val colorVisible: Boolean = true
+    val colorVisible: Boolean = true,
+    val alignVisible: Boolean = true
 )
 
 enum class ViewMode { LIST, GRID }
@@ -397,6 +410,28 @@ fun ToggleButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+// Toggling button that supports icons and colours
+@Composable
+fun IconToggleButton(icon: ImageVector, contentDescription: String, enabled: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (enabled) Color.Red else Color.LightGray
+        ),
+        modifier = Modifier
+            .padding(4.dp)
+            .size(30.dp),
+        contentPadding = PaddingValues(0.dp),
+        shape = CircleShape
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White
+        )
+    }
+}
+
 // Custom search bar
 @Composable
 fun CustomSearchBar(
@@ -574,8 +609,12 @@ fun NoteCard(
 // Note page specific sub header
 @Composable
 fun NoteSubHeader(
+    isReadOnly: Boolean,
     onDeleteClick: (() -> Unit)? = null,
     onColorCycle: (() -> Unit)? = null,
+    onReadOnly: (() -> Unit)? = null,
+    currentAlign: TextAlign,
+    onAlignCycle: () -> Unit,
     viewModel: NotesViewModel
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -590,36 +629,65 @@ fun NoteSubHeader(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Cycle Color Button
-            if (settings.colorVisible) {
-                if (onColorCycle != null) {
-                    IconButton(onClick = onColorCycle) {
+
+                // Paragraph Alignment Button
+                if (settings.alignVisible) {
+                    IconButton(onClick = { onAlignCycle() }) {
                         Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = "Cycle Color",
+                            imageVector = when (currentAlign) {
+                                TextAlign.Left -> Icons.Default.FormatAlignLeft
+                                TextAlign.Center -> Icons.Default.FormatAlignCenter
+                                TextAlign.Right -> Icons.Default.FormatAlignRight
+                                else -> Icons.Default.FormatAlignLeft
+                            },
+                            contentDescription = "ParagraphAlignment",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Read Only Button
+                if (settings.readOnlyVisible && onReadOnly != null) {
+                    IconButton(onClick = onReadOnly) {
+                        Icon(
+                            imageVector = if (isReadOnly) Icons.Default.Lock else Icons.Default.LockOpen,
+                            contentDescription = if (isReadOnly) "Locked" else "Unlocked",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // Cycle Color Button
+                if (settings.colorVisible) {
+                    if (onColorCycle != null) {
+                        IconButton(onClick = onColorCycle) {
+                            Icon(
+                                imageVector = Icons.Default.Palette,
+                                contentDescription = "Cycle Color",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+
+
+                // Delete button (if available)
+                if (onDeleteClick != null) {
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Note",
                             tint = Color.White
                         )
                     }
                 }
             }
-
-
-            // Delete button (if available)
-            if (onDeleteClick != null) {
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Note",
-                        tint = Color.White
-                    )
-                }
-            }
         }
     }
-}
 
 
 // Home Page
@@ -824,6 +892,15 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
             )
 
             SettingItem(
+                title = "Show Paragraph Alignment",
+                checked = settings.alignVisible,
+                onCheckedChange = { newValue ->
+                    viewModel.updateSettings { it.copy(alignVisible = newValue) }
+                },
+                viewModel = viewModel
+            )
+
+            SettingItem(
                 title = "Show Custom Note Colors",
                 checked = settings.colorVisible,
                 onCheckedChange = { newValue ->
@@ -883,10 +960,23 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
 
     val richTextState = rememberRichTextState()
 
-
+    // Text styling
     var boldEnabled by remember { mutableStateOf(false) }
     var italicEnabled by remember { mutableStateOf(false) }
     var underlineEnabled by remember { mutableStateOf(false) }
+    var highlightEnabled by remember { mutableStateOf(false) }
+    var currentAlign by remember { mutableStateOf(TextAlign.Left) }
+
+    // Values for cycling through paragraph alignment
+    val cycleAlignment: () -> Unit = {
+        val nextAlign = when (currentAlign) {
+            TextAlign.Left -> TextAlign.Center
+            TextAlign.Center -> TextAlign.Right
+            else -> TextAlign.Left
+        }
+        richTextState.toggleParagraphStyle(ParagraphStyle(textAlign = nextAlign))
+        currentAlign = nextAlign
+    }
 
 
     LaunchedEffect(note.content) {
@@ -899,6 +989,11 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                 boldEnabled = style.fontWeight == FontWeight.Bold
                 italicEnabled = style.fontStyle == FontStyle.Italic
                 underlineEnabled = style.textDecoration?.contains(TextDecoration.Underline) == true
+                highlightEnabled = style.color == Color.Red
+            }
+        snapshotFlow { richTextState.currentParagraphStyle }
+            .collect { style ->
+                currentAlign = style.textAlign ?: TextAlign.Left
             }
     }
 
@@ -907,6 +1002,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             Column {
                 Header(navController, viewModel)
                 NoteSubHeader(
+                    isReadOnly = note.isReadOnly,
                     onDeleteClick = {
                         viewModel.deleteNote(note.id)
                         navController.popBackStack()
@@ -917,6 +1013,13 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                         viewModel.updateNote(updatedNote)
                         note = updatedNote
                     },
+                    onReadOnly = {
+                        val updatedNote = note.copy(isReadOnly = !note.isReadOnly)
+                        viewModel.updateNote(updatedNote)
+                        note = updatedNote
+                    },
+                    currentAlign = currentAlign,
+                    onAlignCycle = cycleAlignment,
                     viewModel = viewModel
                 )
             }
@@ -958,7 +1061,8 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                         focusedIndicatorColor = Color(0xFFe1e2ec),
                         unfocusedIndicatorColor = Color(0xFFe1e2ec),
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !note.isReadOnly,
                 )
             }
 
@@ -969,6 +1073,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             RichTextEditor(
                 state = richTextState,
                 placeholder = { Text("Notes go here") },
+                enabled = !note.isReadOnly,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 200.dp)
@@ -981,23 +1086,36 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
 
             // Style buttons
             if (settings.textStyleVisible) {
-            Row(modifier = imePaddingModifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End ) {
-                ToggleButton("B", boldEnabled) {
-                    richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                }
-                ToggleButton("I", italicEnabled) {
-                    richTextState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                }
-                ToggleButton("U", underlineEnabled) {
-                    richTextState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+                Row(modifier = imePaddingModifier.fillMaxWidth()) {
+                    Row(
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        IconToggleButton(
+                            icon = Icons.Default.AutoFixHigh,
+                            contentDescription = "Highlight",
+                            enabled = highlightEnabled,
+                            onClick = {
+                                richTextState.toggleSpanStyle(SpanStyle(color = Color.Red))
+                            }
+                        )
+                    }
+                    Row(
+                        modifier = imePaddingModifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        ToggleButton("B", boldEnabled) {
+                            richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                        }
+                        ToggleButton("I", italicEnabled) {
+                            richTextState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                        }
+                        ToggleButton("U", underlineEnabled) {
+                            richTextState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+                        }
+                    }
                 }
             }
-            }
-
-
             Spacer(modifier = Modifier.height(160.dp))
-
         }
     }
 
@@ -1014,7 +1132,6 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             }
         }
     }
-
 }
 
 
