@@ -85,6 +85,7 @@ import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.ParagraphStyle
 
@@ -398,7 +399,8 @@ fun ToggleButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (enabled) Color.Gray else Color.LightGray
+            containerColor = if (enabled) Color.Gray else Color.LightGray,
+            contentColor = Color.White
         ),
         modifier = Modifier
             .padding(4.dp)
@@ -558,7 +560,7 @@ fun NoteCard(
 
                 Text(
                     text = note.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(color = Color.Black),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 4.dp),
                     maxLines = 2
@@ -592,7 +594,7 @@ fun NoteCard(
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = note.title, style = MaterialTheme.typography.titleMedium)
+                    Text(text = note.title, style = MaterialTheme.typography.titleMedium.copy(color = Color.Black))
                     if (settings.dateVisible) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
@@ -807,6 +809,7 @@ fun SettingsPage(navController: NavController, viewModel: NotesViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(
@@ -995,6 +998,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
             .collect { style ->
                 currentAlign = style.textAlign ?: TextAlign.Left
             }
+
     }
 
     Scaffold(
@@ -1076,7 +1080,7 @@ fun EditNotePage(navController: NavController, noteId: Long?, viewModel: NotesVi
                 enabled = !note.isReadOnly,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp)
+                    .heightIn(min = 200.dp),
             )
 
             val imePaddingModifier = Modifier
